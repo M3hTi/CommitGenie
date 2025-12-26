@@ -262,4 +262,134 @@ describe('AnalyzerService', () => {
       expect(result.full).toMatch(/^✨/);
     });
   });
+
+  describe('breaking change detection', () => {
+    it('should detect breaking change from keyword in diff', () => {
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'M', path: 'src/api/endpoints.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('// BREAKING CHANGE: removed old endpoint');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.isBreaking).toBe(true);
+      expect(result.full).toContain('!');
+      expect(result.full).toContain('BREAKING CHANGE:');
+    });
+
+    it('should detect breaking change from deleted source files', () => {
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'D', path: 'src/services/oldService.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.isBreaking).toBe(true);
+      expect(result.full).toContain('!');
+    });
+
+    it('should detect breaking change from deprecated keyword', () => {
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'M', path: 'src/utils/helper.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('+ * @deprecated This function will be removed');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.isBreaking).toBe(true);
+    });
+
+    it('should not flag as breaking when detection is disabled', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        breakingChangeDetection: {
+          enabled: false,
+        },
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'D', path: 'src/services/oldService.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('// BREAKING: removed feature');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.isBreaking).toBeFalsy();
+      expect(result.full).not.toContain('!:');
+    });
+
+    it('should use custom keywords from config', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        breakingChangeDetection: {
+          enabled: true,
+          keywords: ['major-change'],
+        },
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'M', path: 'src/api/endpoints.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('// major-change in API');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.isBreaking).toBe(true);
+    });
+
+    it('should include BREAKING CHANGE footer when enabled', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        breakingChangeDetection: {
+          enabled: true,
+          includeFooter: true,
+        },
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'D', path: 'src/api/oldEndpoint.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.full).toContain('BREAKING CHANGE:');
+    });
+
+    it('should not include BREAKING CHANGE footer when disabled', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        breakingChangeDetection: {
+          enabled: true,
+          includeFooter: false,
+        },
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'D', path: 'src/api/oldEndpoint.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.full).toContain('!');
+      expect(result.full).not.toContain('BREAKING CHANGE:');
+    });
+
+    it('should not detect breaking change for non-source file deletions', () => {
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'D', path: 'docs/old-guide.md' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.isBreaking).toBeFalsy();
+    });
+  });
 });

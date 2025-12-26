@@ -21,6 +21,7 @@ A CLI tool that generates intelligent Git commit messages by analyzing your stag
 - **Commit body support** - Automatically generates detailed body for large changes
 - **Ticket/Issue linking** - Auto-detects ticket references from branch names (JIRA, GitHub issues)
 - **Commit history learning** - Learns your project's commit style from past commits
+- **Breaking change detection** - Automatically detects and flags breaking changes with `!` and footer
 - Shows detailed file change statistics
 - Error handling for edge cases
 
@@ -165,6 +166,11 @@ Example configuration:
   "learnFromHistory": {
     "enabled": true,
     "commitCount": 50
+  },
+  "breakingChangeDetection": {
+    "enabled": true,
+    "keywords": ["breaking", "removed", "deleted", "deprecated"],
+    "includeFooter": true
   }
 }
 ```
@@ -181,6 +187,10 @@ Configuration options:
 - `learnFromHistory` - Learn commit style from past commits
   - `enabled` - Enable/disable history learning (default: `true`)
   - `commitCount` - Number of commits to analyze (default: `50`)
+- `breakingChangeDetection` - Detect and flag breaking changes
+  - `enabled` - Enable/disable breaking change detection (default: `true`)
+  - `keywords` - Custom keywords to detect breaking changes
+  - `includeFooter` - Include `BREAKING CHANGE:` footer (default: `true`)
 
 ## Development
 
@@ -249,6 +259,32 @@ CommitGenie learns from your project's commit history to match its style:
 - **Emoji detection**: If 30%+ of past commits use emojis, new commits will include them
 - **Scope suggestions**: Learns common scopes from history to suggest for your files
 - **Style matching**: Adapts to your team's conventions automatically
+
+### Breaking Change Detection
+
+CommitGenie automatically detects breaking changes and formats commit messages according to Conventional Commits specification:
+
+**Detection methods:**
+- **Keywords in diff**: Detects words like `breaking`, `removed`, `deleted`, `deprecated`
+- **Deleted source files**: Flags removal of `.ts`, `.js`, `.py`, etc. as potentially breaking
+- **Code patterns**: Identifies removed exports, deleted functions, and changed interfaces
+
+**Output format:**
+When a breaking change is detected, the commit message includes:
+1. A `!` suffix on the commit type (e.g., `feat!:` instead of `feat:`)
+2. A `BREAKING CHANGE:` footer explaining the change
+
+Example output:
+```
+✨ feat!: remove legacy authentication endpoint
+
+BREAKING CHANGE: Removed deprecated /auth/v1 endpoint
+```
+
+**Customization:**
+- Disable detection entirely with `breakingChangeDetection.enabled: false`
+- Add custom keywords with `breakingChangeDetection.keywords`
+- Toggle the footer with `breakingChangeDetection.includeFooter`
 
 ## Error Handling
 

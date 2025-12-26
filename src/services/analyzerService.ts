@@ -15,6 +15,32 @@ const COMMIT_EMOJIS: Record<CommitType, string> = {
   perf: '⚡',
 };
 
+// Default keywords that indicate breaking changes
+const DEFAULT_BREAKING_KEYWORDS = [
+  'breaking',
+  'breaking change',
+  'breaking-change',
+  'removed',
+  'deprecated',
+  'incompatible',
+];
+
+// Patterns that indicate breaking changes in code
+const BREAKING_PATTERNS = [
+  // Removed exports
+  /^-\s*export\s+(function|class|const|let|var|interface|type|enum)\s+(\w+)/gm,
+  // Removed function parameters
+  /^-\s*(public|private|protected)?\s*(async\s+)?function\s+\w+\s*\([^)]+\)/gm,
+  // Changed function signatures (removed parameters)
+  /^-\s*\w+\s*\([^)]+\)\s*[:{]/gm,
+  // Removed class methods
+  /^-\s*(public|private|protected)\s+(static\s+)?(async\s+)?\w+\s*\(/gm,
+  // Removed interface/type properties
+  /^-\s+\w+\s*[?:]?\s*:/gm,
+  // Major version bump in package.json
+  /^-\s*"version":\s*"\d+/gm,
+];
+
 export class AnalyzerService {
   /**
    * Analyze staged changes and return structured analysis
@@ -87,6 +113,9 @@ export class AnalyzerService {
     // Determine scope if applicable
     const scope = this.determineScope(stagedFiles);
 
+    // Detect breaking changes
+    const { isBreaking, reasons } = this.detectBreakingChanges(diff, stagedFiles);
+
     return {
       commitType,
       scope,
@@ -94,6 +123,82 @@ export class AnalyzerService {
       filesAffected,
       fileChanges,
       isLargeChange,
+      isBreakingChange: isBreaking,
+      breakingChangeReasons: reasons,
+    };
+  }
+
+  /**
+   * Detect breaking changes from diff content and file changes
+   */
+  private static detectBreakingChanges(
+    diff: string,
+    stagedFiles: FileChange[]
+  ): { isBreaking: boolean; reasons: string[] } {
+    const config = ConfigService.getConfig();
+    const breakingConfig = config.breakingChangeDetection;
+
+    // Check if breaking change detection is disabled
+    if (breakingConfig?.enabled === false) {
+      return { isBreaking: false, reasons: [] };
+    }
+
+    const reasons: string[] = [];
+    const diffLower = diff.toLowerCase();
+
+    // Check for keyword-based breaking changes
+    const keywords = breakingConfig?.keywords || DEFAULT_BREAKING_KEYWORDS;
+    for (const keyword of keywords) {
+      if (diffLower.includes(keyword.toLowerCase())) {
+        reasons.push(`Contains "${keyword}" keyword`);
+      }
+    }
+
+    // Check for deleted source files (potentially breaking)
+    const deletedSourceFiles = stagedFiles.filter(
+      f => f.status === 'D' && detectFileType(f.path) === 'source'
+    );
+    if (deletedSourceFiles.length > 0) {
+      const fileNames = deletedSourceFiles.map(f => this.getFileName(f.path)).join(', ');
+      reasons.push(`Deleted source files: ${fileNames}`);
+    }
+
+    // Check for pattern-based breaking changes in diff
+    for (const pattern of BREAKING_PATTERNS) {
+      pattern.lastIndex = 0; // Reset regex state
+      const matches = diff.match(pattern);
+      if (matches && matches.length > 0) {
+        // Identify what type of breaking change
+        if (pattern.source.includes('export')) {
+          reasons.push('Removed exported members');
+        } else if (pattern.source.includes('function')) {
+          reasons.push('Changed function signatures');
+        } else if (pattern.source.includes('public|private|protected')) {
+          reasons.push('Removed class methods');
+        } else if (pattern.source.includes('version')) {
+          reasons.push('Major version change detected');
+        }
+        break; // Only add one pattern-based reason
+      }
+    }
+
+    // Check for renamed files that might break imports
+    const renamedFiles = stagedFiles.filter(f => f.status === 'R');
+    if (renamedFiles.length > 0) {
+      const sourceRenames = renamedFiles.filter(
+        f => detectFileType(f.path) === 'source'
+      );
+      if (sourceRenames.length > 0) {
+        reasons.push('Renamed source files (may break imports)');
+      }
+    }
+
+    // Deduplicate reasons
+    const uniqueReasons = [...new Set(reasons)];
+
+    return {
+      isBreaking: uniqueReasons.length > 0,
+      reasons: uniqueReasons,
     };
   }
 
@@ -343,8 +448,13 @@ export class AnalyzerService {
     description: string,
     body: string | undefined,
     includeEmoji: boolean,
-    ticketInfo?: TicketInfo | null
+    ticketInfo?: TicketInfo | null,
+    isBreaking?: boolean,
+    breakingReasons?: string[]
   ): string {
+    const config = ConfigService.getConfig();
+    const includeBreakingFooter = config.breakingChangeDetection?.includeFooter !== false;
+
     let full = '';
 
     if (includeEmoji) {
@@ -357,10 +467,25 @@ export class AnalyzerService {
       full += `(${scope})`;
     }
 
+    // Add breaking change indicator
+    if (isBreaking) {
+      full += '!';
+    }
+
     full += `: ${description}`;
 
     if (body) {
       full += `\n\n${body}`;
+    }
+
+    // Add BREAKING CHANGE footer if enabled and breaking
+    if (isBreaking && includeBreakingFooter && breakingReasons && breakingReasons.length > 0) {
+      full += '\n\nBREAKING CHANGE: ' + breakingReasons[0];
+      if (breakingReasons.length > 1) {
+        for (let i = 1; i < breakingReasons.length; i++) {
+          full += `\n- ${breakingReasons[i]}`;
+        }
+      }
     }
 
     // Add ticket reference as footer
@@ -394,7 +519,9 @@ export class AnalyzerService {
       analysis.description,
       body,
       includeEmoji,
-      ticketInfo
+      ticketInfo,
+      analysis.isBreakingChange,
+      analysis.breakingChangeReasons
     );
 
     return {
@@ -403,6 +530,7 @@ export class AnalyzerService {
       description: analysis.description,
       body,
       full,
+      isBreaking: analysis.isBreakingChange,
     };
   }
 
@@ -422,6 +550,7 @@ export class AnalyzerService {
     const suggestions: MessageSuggestion[] = [];
     const body = this.generateBody(analysis);
     const ticketInfo = HistoryService.detectTicketFromBranch();
+    const { isBreakingChange, breakingChangeReasons } = analysis;
 
     // Try to get a better scope from history if none detected
     let scope = analysis.scope;
@@ -431,24 +560,27 @@ export class AnalyzerService {
       scope = HistoryService.getSuggestedScope(filePaths);
     }
 
-    // Suggestion 1: Default (with scope if detected, with ticket)
+    // Suggestion 1: Default (with scope if detected, with ticket, with breaking change)
     const defaultFull = this.buildFullMessage(
       analysis.commitType,
       scope,
       analysis.description,
       body,
       includeEmoji,
-      ticketInfo
+      ticketInfo,
+      isBreakingChange,
+      breakingChangeReasons
     );
     suggestions.push({
       id: 1,
-      label: 'Recommended',
+      label: isBreakingChange ? 'Breaking Change' : 'Recommended',
       message: {
         type: analysis.commitType,
         scope: scope,
         description: analysis.description,
         body,
         full: defaultFull,
+        isBreaking: isBreakingChange,
       },
     });
 
@@ -460,7 +592,9 @@ export class AnalyzerService {
         analysis.description,
         body,
         includeEmoji,
-        ticketInfo
+        ticketInfo,
+        isBreakingChange,
+        breakingChangeReasons
       );
       suggestions.push({
         id: 2,
@@ -471,6 +605,7 @@ export class AnalyzerService {
           description: analysis.description,
           body,
           full: noScopeFull,
+          isBreaking: isBreakingChange,
         },
       });
     }
@@ -484,7 +619,9 @@ export class AnalyzerService {
         altDescription,
         body,
         includeEmoji,
-        ticketInfo
+        ticketInfo,
+        isBreakingChange,
+        breakingChangeReasons
       );
       suggestions.push({
         id: suggestions.length + 1,
@@ -495,6 +632,7 @@ export class AnalyzerService {
           description: altDescription,
           body,
           full: altFull,
+          isBreaking: isBreakingChange,
         },
       });
     }
@@ -507,7 +645,9 @@ export class AnalyzerService {
         analysis.description,
         undefined,
         includeEmoji,
-        ticketInfo
+        ticketInfo,
+        isBreakingChange,
+        breakingChangeReasons
       );
       suggestions.push({
         id: suggestions.length + 1,
@@ -518,6 +658,7 @@ export class AnalyzerService {
           description: analysis.description,
           body: undefined,
           full: compactFull,
+          isBreaking: isBreakingChange,
         },
       });
     }
@@ -530,7 +671,9 @@ export class AnalyzerService {
         analysis.description,
         body,
         includeEmoji,
-        null
+        null,
+        isBreakingChange,
+        breakingChangeReasons
       );
       suggestions.push({
         id: suggestions.length + 1,
@@ -541,6 +684,33 @@ export class AnalyzerService {
           description: analysis.description,
           body,
           full: noTicketFull,
+          isBreaking: isBreakingChange,
+        },
+      });
+    }
+
+    // Suggestion 6: Without breaking change indicator (if breaking change detected)
+    if (isBreakingChange) {
+      const noBreakingFull = this.buildFullMessage(
+        analysis.commitType,
+        scope,
+        analysis.description,
+        body,
+        includeEmoji,
+        ticketInfo,
+        false,
+        []
+      );
+      suggestions.push({
+        id: suggestions.length + 1,
+        label: 'No Breaking Flag',
+        message: {
+          type: analysis.commitType,
+          scope: scope,
+          description: analysis.description,
+          body,
+          full: noBreakingFull,
+          isBreaking: false,
         },
       });
     }

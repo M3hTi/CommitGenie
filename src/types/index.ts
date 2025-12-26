@@ -32,6 +32,8 @@ export interface ChangeAnalysis {
     renamed: string[];
   };
   isLargeChange: boolean;
+  isBreakingChange: boolean;
+  breakingChangeReasons: string[];
 }
 
 export type CommitType =
@@ -50,6 +52,7 @@ export interface CommitMessage {
   description: string;
   body?: string;
   full: string;
+  isBreaking?: boolean;
 }
 
 export interface MessageSuggestion {
@@ -89,6 +92,12 @@ export interface CommitGenieConfig {
   learnFromHistory?: {
     enabled?: boolean;
     commitCount?: number;  // Number of commits to analyze (default: 50)
+  };
+  // Breaking change detection options
+  breakingChangeDetection?: {
+    enabled?: boolean;
+    keywords?: string[];  // Custom keywords to detect breaking changes
+    includeFooter?: boolean;  // Include BREAKING CHANGE: footer (default: true)
   };
 }
 

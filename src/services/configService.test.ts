@@ -29,6 +29,8 @@ describe('ConfigService', () => {
       expect(config.scopes).toEqual([]);
       expect(config.ticketLinking?.enabled).toBe(true);
       expect(config.learnFromHistory?.enabled).toBe(true);
+      expect(config.breakingChangeDetection?.enabled).toBe(true);
+      expect(config.breakingChangeDetection?.includeFooter).toBe(true);
     });
 
     it('should load config from .commitgenierc.json', () => {

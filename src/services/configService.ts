@@ -23,6 +23,10 @@ const DEFAULT_CONFIG: CommitGenieConfig = {
     enabled: true,
     commitCount: 50,
   },
+  breakingChangeDetection: {
+    enabled: true,
+    includeFooter: true,
+  },
 };
 
 export class ConfigService {
@@ -134,6 +138,11 @@ export class ConfigService {
         learnFromHistory: {
           enabled: true,
           commitCount: 50,
+        },
+        breakingChangeDetection: {
+          enabled: true,
+          keywords: ['breaking', 'removed', 'deleted', 'deprecated'],
+          includeFooter: true,
         },
       };
 
