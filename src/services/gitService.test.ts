@@ -1,12 +1,14 @@
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { GitService } from './gitService';
 
 // Mock child_process
 jest.mock('child_process', () => ({
   execSync: jest.fn(),
+  spawnSync: jest.fn(),
 }));
 
 const mockedExecSync = execSync as jest.MockedFunction<typeof execSync>;
+const mockedSpawnSync = spawnSync as jest.MockedFunction<typeof spawnSync>;
 
 describe('GitService', () => {
   beforeEach(() => {
@@ -110,31 +112,55 @@ describe('GitService', () => {
 
   describe('commit', () => {
     it('should execute git commit with message', () => {
-      mockedExecSync.mockReturnValueOnce('');
+      mockedSpawnSync.mockReturnValueOnce({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        pid: 123,
+        output: [],
+        signal: null,
+      });
 
       expect(() => GitService.commit('feat: add new feature')).not.toThrow();
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'git commit -m "feat: add new feature"',
-        expect.any(Object)
+      expect(mockedSpawnSync).toHaveBeenCalledWith(
+        'git',
+        ['commit', '-F', '-'],
+        expect.objectContaining({
+          input: 'feat: add new feature',
+        })
       );
     });
 
-    it('should escape double quotes in message', () => {
-      mockedExecSync.mockReturnValueOnce('');
+    it('should handle multi-line commit messages', () => {
+      mockedSpawnSync.mockReturnValueOnce({
+        status: 0,
+        stdout: '',
+        stderr: '',
+        pid: 123,
+        output: [],
+        signal: null,
+      });
 
-      GitService.commit('fix: resolve "issue" with quotes');
+      const multiLineMessage = 'feat: add new feature\n\nThis is the body\nwith multiple lines';
+      GitService.commit(multiLineMessage);
 
-      expect(mockedExecSync).toHaveBeenCalledWith(
-        'git commit -m "fix: resolve \\"issue\\" with quotes"',
-        expect.any(Object)
+      expect(mockedSpawnSync).toHaveBeenCalledWith(
+        'git',
+        ['commit', '-F', '-'],
+        expect.objectContaining({
+          input: multiLineMessage,
+        })
       );
     });
 
     it('should throw error when commit fails', () => {
-      mockedExecSync.mockImplementationOnce(() => {
-        const error: any = new Error('Commit failed');
-        error.stderr = 'nothing to commit';
-        throw error;
+      mockedSpawnSync.mockReturnValueOnce({
+        status: 1,
+        stdout: '',
+        stderr: 'nothing to commit',
+        pid: 123,
+        output: [],
+        signal: null,
       });
 
       expect(() => GitService.commit('test')).toThrow('Failed to commit');
@@ -147,7 +173,16 @@ describe('GitService', () => {
 
       const result = GitService.getGitDir();
 
-      expect(result).toContain('.git');
+      // Should resolve to absolute path ending with .git
+      expect(result.endsWith('.git')).toBe(true);
+    });
+
+    it('should handle absolute paths', () => {
+      mockedExecSync.mockReturnValueOnce('/home/user/project/.git\n');
+
+      const result = GitService.getGitDir();
+
+      expect(result).toBe('/home/user/project/.git');
     });
   });
 });

@@ -1,13 +1,16 @@
 import { AnalyzerService } from './analyzerService';
 import { GitService } from './gitService';
 import { ConfigService } from './configService';
+import { HistoryService } from './historyService';
 
 // Mock dependencies
 jest.mock('./gitService');
 jest.mock('./configService');
+jest.mock('./historyService');
 
 const mockedGitService = GitService as jest.Mocked<typeof GitService>;
 const mockedConfigService = ConfigService as jest.Mocked<typeof ConfigService>;
+const mockedHistoryService = HistoryService as jest.Mocked<typeof HistoryService>;
 
 describe('AnalyzerService', () => {
   beforeEach(() => {
@@ -18,6 +21,16 @@ describe('AnalyzerService', () => {
       defaultType: 'feat',
       maxMessageLength: 72,
     });
+    // Default diff stats mock
+    mockedGitService.getDiffStats.mockReturnValue({
+      filesChanged: 1,
+      insertions: 10,
+      deletions: 0,
+    });
+    // Default history service mocks
+    mockedHistoryService.projectUsesEmojis.mockReturnValue(true);
+    mockedHistoryService.detectTicketFromBranch.mockReturnValue(null);
+    mockedHistoryService.getSuggestedScope.mockReturnValue(undefined);
   });
 
   describe('generateCommitMessage', () => {
@@ -179,6 +192,74 @@ describe('AnalyzerService', () => {
       expect(analysis.filesAffected.test).toBe(1);
       expect(analysis.filesAffected.docs).toBe(1);
       expect(analysis.filesAffected.config).toBe(1);
+    });
+  });
+
+  describe('ticket linking', () => {
+    it('should include ticket reference from branch', () => {
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'A', path: 'src/newFeature.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+      mockedHistoryService.detectTicketFromBranch.mockReturnValue({
+        id: 'ABC-123',
+        source: 'branch',
+        prefix: 'Refs:',
+      });
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.full).toContain('Refs: ABC-123');
+    });
+
+    it('should not include ticket when none detected', () => {
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'A', path: 'src/newFeature.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+      mockedHistoryService.detectTicketFromBranch.mockReturnValue(null);
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.full).not.toContain('Refs:');
+    });
+  });
+
+  describe('history learning', () => {
+    it('should use history to determine emoji usage', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        includeEmoji: undefined, // Let history decide
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'A', path: 'src/newFeature.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+      mockedHistoryService.projectUsesEmojis.mockReturnValue(false);
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.full).not.toMatch(/^[✨🐛📚💄♻️🧪🔧⚡]/);
+    });
+
+    it('should use config emoji setting over history', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        includeEmoji: true, // Explicitly set
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'A', path: 'src/newFeature.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+      mockedHistoryService.projectUsesEmojis.mockReturnValue(false); // Would suggest no emoji
+
+      const result = AnalyzerService.generateCommitMessage();
+
+      expect(result.full).toMatch(/^✨/);
     });
   });
 });

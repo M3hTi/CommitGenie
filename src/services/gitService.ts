@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'child_process';
-import { GitStatus, FileChange, DiffStats } from '../types';
+import { GitStatus, FileChange, DiffStats, HistoricalCommit } from '../types';
 
 export class GitService {
   /**
@@ -167,6 +167,63 @@ export class GitService {
       return gitDir;
     } catch (error) {
       throw new Error('Failed to get git directory');
+    }
+  }
+
+  /**
+   * Get the current branch name
+   */
+  static getCurrentBranch(): string | null {
+    try {
+      const output = execSync('git rev-parse --abbrev-ref HEAD', {
+        encoding: 'utf-8',
+      });
+      const branch = output.trim();
+      return branch === 'HEAD' ? null : branch; // Detached HEAD state
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get recent commit history
+   */
+  static getCommitHistory(count: number = 50): HistoricalCommit[] {
+    try {
+      // Use %x00 as delimiter to handle multi-line messages
+      const format = '%H%x00%s%x00%b%x00';
+      const output = execSync(
+        `git log -${count} --format="${format}"`,
+        {
+          encoding: 'utf-8',
+          maxBuffer: 1024 * 1024 * 5, // 5MB buffer
+        }
+      );
+
+      const commits: HistoricalCommit[] = [];
+      const entries = output.split('\x00\x00').filter(e => e.trim());
+
+      for (const entry of entries) {
+        const parts = entry.split('\x00');
+        if (parts.length >= 2) {
+          const hash = parts[0].trim();
+          const subject = parts[1].trim();
+          const body = parts[2]?.trim() || undefined;
+
+          if (hash && subject) {
+            commits.push({
+              hash,
+              subject,
+              message: body ? `${subject}\n\n${body}` : subject,
+              body,
+            });
+          }
+        }
+      }
+
+      return commits;
+    } catch {
+      return [];
     }
   }
 }

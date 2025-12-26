@@ -1,7 +1,8 @@
 import { GitService } from './gitService';
 import { ConfigService } from './configService';
+import { HistoryService } from './historyService';
 import { detectFileType } from '../utils/filePatterns';
-import { ChangeAnalysis, CommitMessage, CommitType, FileChange, MessageSuggestion } from '../types';
+import { ChangeAnalysis, CommitMessage, CommitType, FileChange, MessageSuggestion, TicketInfo } from '../types';
 
 const COMMIT_EMOJIS: Record<CommitType, string> = {
   feat: '✨',
@@ -341,7 +342,8 @@ export class AnalyzerService {
     scope: string | undefined,
     description: string,
     body: string | undefined,
-    includeEmoji: boolean
+    includeEmoji: boolean,
+    ticketInfo?: TicketInfo | null
   ): string {
     let full = '';
 
@@ -361,6 +363,12 @@ export class AnalyzerService {
       full += `\n\n${body}`;
     }
 
+    // Add ticket reference as footer
+    if (ticketInfo) {
+      const prefix = ticketInfo.prefix || 'Refs:';
+      full += `\n\n${prefix} ${ticketInfo.id}`;
+    }
+
     return full;
   }
 
@@ -370,15 +378,23 @@ export class AnalyzerService {
   static generateCommitMessage(): CommitMessage {
     const analysis = this.analyzeChanges();
     const config = ConfigService.getConfig();
-    const includeEmoji = config.includeEmoji !== false;
+
+    // Determine emoji usage: config overrides, then history learning
+    let includeEmoji = config.includeEmoji;
+    if (includeEmoji === undefined) {
+      includeEmoji = HistoryService.projectUsesEmojis();
+    }
 
     const body = this.generateBody(analysis);
+    const ticketInfo = HistoryService.detectTicketFromBranch();
+
     const full = this.buildFullMessage(
       analysis.commitType,
       analysis.scope,
       analysis.description,
       body,
-      includeEmoji
+      includeEmoji,
+      ticketInfo
     );
 
     return {
@@ -396,25 +412,40 @@ export class AnalyzerService {
   static generateMultipleSuggestions(): MessageSuggestion[] {
     const analysis = this.analyzeChanges();
     const config = ConfigService.getConfig();
-    const includeEmoji = config.includeEmoji !== false;
+
+    // Determine emoji usage: config overrides, then history learning
+    let includeEmoji = config.includeEmoji;
+    if (includeEmoji === undefined) {
+      includeEmoji = HistoryService.projectUsesEmojis();
+    }
+
     const suggestions: MessageSuggestion[] = [];
-
     const body = this.generateBody(analysis);
+    const ticketInfo = HistoryService.detectTicketFromBranch();
 
-    // Suggestion 1: Default (with scope if detected)
+    // Try to get a better scope from history if none detected
+    let scope = analysis.scope;
+    if (!scope) {
+      const stagedFiles = GitService.getStagedFiles();
+      const filePaths = stagedFiles.map(f => f.path);
+      scope = HistoryService.getSuggestedScope(filePaths);
+    }
+
+    // Suggestion 1: Default (with scope if detected, with ticket)
     const defaultFull = this.buildFullMessage(
       analysis.commitType,
-      analysis.scope,
+      scope,
       analysis.description,
       body,
-      includeEmoji
+      includeEmoji,
+      ticketInfo
     );
     suggestions.push({
       id: 1,
       label: 'Recommended',
       message: {
         type: analysis.commitType,
-        scope: analysis.scope,
+        scope: scope,
         description: analysis.description,
         body,
         full: defaultFull,
@@ -422,13 +453,14 @@ export class AnalyzerService {
     });
 
     // Suggestion 2: Without scope (more concise)
-    if (analysis.scope) {
+    if (scope) {
       const noScopeFull = this.buildFullMessage(
         analysis.commitType,
         undefined,
         analysis.description,
         body,
-        includeEmoji
+        includeEmoji,
+        ticketInfo
       );
       suggestions.push({
         id: 2,
@@ -448,17 +480,18 @@ export class AnalyzerService {
     if (altDescription && altDescription !== analysis.description) {
       const altFull = this.buildFullMessage(
         analysis.commitType,
-        analysis.scope,
+        scope,
         altDescription,
         body,
-        includeEmoji
+        includeEmoji,
+        ticketInfo
       );
       suggestions.push({
         id: suggestions.length + 1,
         label: 'Detailed',
         message: {
           type: analysis.commitType,
-          scope: analysis.scope,
+          scope: scope,
           description: altDescription,
           body,
           full: altFull,
@@ -470,20 +503,44 @@ export class AnalyzerService {
     if (body) {
       const compactFull = this.buildFullMessage(
         analysis.commitType,
-        analysis.scope,
+        scope,
         analysis.description,
         undefined,
-        includeEmoji
+        includeEmoji,
+        ticketInfo
       );
       suggestions.push({
         id: suggestions.length + 1,
         label: 'Compact',
         message: {
           type: analysis.commitType,
-          scope: analysis.scope,
+          scope: scope,
           description: analysis.description,
           body: undefined,
           full: compactFull,
+        },
+      });
+    }
+
+    // Suggestion 5: Without ticket reference (if ticket was detected)
+    if (ticketInfo) {
+      const noTicketFull = this.buildFullMessage(
+        analysis.commitType,
+        scope,
+        analysis.description,
+        body,
+        includeEmoji,
+        null
+      );
+      suggestions.push({
+        id: suggestions.length + 1,
+        label: 'No Ticket',
+        message: {
+          type: analysis.commitType,
+          scope: scope,
+          description: analysis.description,
+          body,
+          full: noTicketFull,
         },
       });
     }

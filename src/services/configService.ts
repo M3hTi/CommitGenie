@@ -12,9 +12,17 @@ const CONFIG_FILES = [
 const DEFAULT_CONFIG: CommitGenieConfig = {
   scopes: [],
   defaultType: 'feat',
-  includeEmoji: true,
+  includeEmoji: undefined, // Let history learning decide
   maxMessageLength: 72,
   customPatterns: [],
+  ticketLinking: {
+    enabled: true,
+    prefix: 'Refs:',
+  },
+  learnFromHistory: {
+    enabled: true,
+    commitCount: 50,
+  },
 };
 
 export class ConfigService {
@@ -118,6 +126,15 @@ export class ConfigService {
         includeEmoji: true,
         maxMessageLength: 72,
         customPatterns: [],
+        ticketLinking: {
+          enabled: true,
+          patterns: ['[A-Z]{2,10}-\\d+', '#\\d+'],
+          prefix: 'Refs:',
+        },
+        learnFromHistory: {
+          enabled: true,
+          commitCount: 50,
+        },
       };
 
       fs.writeFileSync(configPath, JSON.stringify(sampleConfig, null, 2));

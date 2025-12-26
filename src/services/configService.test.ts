@@ -25,8 +25,10 @@ describe('ConfigService', () => {
 
       expect(config.defaultType).toBe('feat');
       expect(config.maxMessageLength).toBe(72);
-      expect(config.includeEmoji).toBe(true);
+      expect(config.includeEmoji).toBeUndefined(); // Let history learning decide
       expect(config.scopes).toEqual([]);
+      expect(config.ticketLinking?.enabled).toBe(true);
+      expect(config.learnFromHistory?.enabled).toBe(true);
     });
 
     it('should load config from .commitgenierc.json', () => {

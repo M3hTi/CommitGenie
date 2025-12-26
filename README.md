@@ -17,6 +17,10 @@ A CLI tool that generates intelligent Git commit messages by analyzing your stag
   - `⚡ perf:` for performance improvements
   - `💄 style:` for style changes
 - Automatically determines scope when applicable
+- **Multiple message suggestions** - Choose from different commit message styles
+- **Commit body support** - Automatically generates detailed body for large changes
+- **Ticket/Issue linking** - Auto-detects ticket references from branch names (JIRA, GitHub issues)
+- **Commit history learning** - Learns your project's commit style from past commits
 - Shows detailed file change statistics
 - Error handling for edge cases
 
@@ -106,6 +110,8 @@ To commit with this message, run:
 - `commit-genie` or `commit-genie generate` - Analyze changes and suggest commit message
 - `commit-genie gen` - Shorthand for generate
 - `commit-genie -c` or `--commit` - Auto-commit with the generated message
+- `commit-genie -s` or `--single` - Show only one suggestion (skip multiple options)
+- `commit-genie -m` or `--message-only` - Output only the commit message (for scripts/hooks)
 - `commit-genie --no-interactive` - Disable interactive prompts
 - `commit-genie hook install` - Install git prepare-commit-msg hook
 - `commit-genie hook uninstall` - Remove the git hook
@@ -150,15 +156,31 @@ Example configuration:
   ],
   "defaultType": "feat",
   "includeEmoji": true,
-  "maxMessageLength": 72
+  "maxMessageLength": 72,
+  "ticketLinking": {
+    "enabled": true,
+    "patterns": ["[A-Z]{2,10}-\\d+", "#\\d+"],
+    "prefix": "Refs:"
+  },
+  "learnFromHistory": {
+    "enabled": true,
+    "commitCount": 50
+  }
 }
 ```
 
 Configuration options:
 - `scopes` - Map file path patterns to commit scopes
 - `defaultType` - Default commit type when none is detected
-- `includeEmoji` - Include emoji prefix in commit messages (default: `true`)
+- `includeEmoji` - Include emoji prefix in commit messages (default: learned from history)
 - `maxMessageLength` - Maximum length for commit messages
+- `ticketLinking` - Auto-detect ticket references from branch names
+  - `enabled` - Enable/disable ticket linking (default: `true`)
+  - `patterns` - Custom regex patterns for ticket detection
+  - `prefix` - Footer prefix like "Refs:", "Closes:", "Fixes:" (default: `"Refs:"`)
+- `learnFromHistory` - Learn commit style from past commits
+  - `enabled` - Enable/disable history learning (default: `true`)
+  - `commitCount` - Number of commits to analyze (default: `50`)
 
 ## Development
 
@@ -182,6 +204,7 @@ CommitGenie/
 │   ├── services/
 │   │   ├── gitService.ts           # Git operations
 │   │   ├── analyzerService.ts      # Change analysis logic
+│   │   ├── historyService.ts       # Ticket detection & history learning
 │   │   ├── hookService.ts          # Git hook installation
 │   │   └── configService.ts        # Configuration loading
 │   ├── utils/
@@ -200,7 +223,32 @@ CommitGenie/
 1. **Git Integration**: Executes git commands to retrieve staged changes and diff information
 2. **File Analysis**: Categorizes files by type (test, docs, config, source)
 3. **Pattern Detection**: Analyzes file paths and diff content for keywords
-4. **Message Generation**: Creates conventional commit messages based on detected patterns
+4. **History Learning**: Analyzes past commits to learn your project's style (emoji usage, common scopes)
+5. **Ticket Detection**: Extracts ticket references from branch names (e.g., `feature/ABC-123-add-login`)
+6. **Message Generation**: Creates conventional commit messages based on detected patterns
+
+### Ticket Linking
+
+CommitGenie automatically detects ticket references from your branch name and appends them to commit messages:
+
+- **JIRA-style**: `ABC-123`, `PROJ-1234`
+- **GitHub/GitLab issues**: `#123`, `#456`
+- **Underscore style**: `ABC_123`
+
+Example: If you're on branch `feature/ABC-123-add-login`, the commit message will include:
+```
+✨ feat: add login functionality
+
+Refs: ABC-123
+```
+
+### History Learning
+
+CommitGenie learns from your project's commit history to match its style:
+
+- **Emoji detection**: If 30%+ of past commits use emojis, new commits will include them
+- **Scope suggestions**: Learns common scopes from history to suggest for your files
+- **Style matching**: Adapts to your team's conventions automatically
 
 ## Error Handling
 

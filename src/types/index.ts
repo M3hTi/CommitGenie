@@ -79,4 +79,38 @@ export interface CommitGenieConfig {
     type: 'test' | 'docs' | 'config' | 'source';
     commitType: CommitType;
   }[];
+  // Ticket linking options
+  ticketLinking?: {
+    enabled?: boolean;
+    patterns?: string[];  // Custom regex patterns for ticket detection
+    prefix?: string;      // e.g., "Refs:", "Closes:", "Fixes:"
+  };
+  // History learning options
+  learnFromHistory?: {
+    enabled?: boolean;
+    commitCount?: number;  // Number of commits to analyze (default: 50)
+  };
+}
+
+export interface TicketInfo {
+  id: string;
+  source: 'branch' | 'custom';
+  prefix?: string;
+}
+
+export interface CommitHistoryAnalysis {
+  usesEmojis: boolean;
+  usesConventionalCommits: boolean;
+  commonScopes: string[];
+  commonVerbs: string[];
+  averageLength: number;
+  emojiFrequency: Record<string, number>;
+  typeFrequency: Record<string, number>;
+}
+
+export interface HistoricalCommit {
+  hash: string;
+  message: string;
+  subject: string;
+  body?: string;
 }
