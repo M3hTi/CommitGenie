@@ -5,6 +5,7 @@ import { MessageSuggestion } from '../types';
 
 export interface GenerateOptions {
   commit?: boolean;
+  dryRun?: boolean;  // Preview commit without executing
   interactive?: boolean;
   messageOnly?: boolean;
   single?: boolean;  // Use single message mode (no multiple suggestions)
@@ -39,6 +40,12 @@ export async function generateCommand(options: GenerateOptions = {}) {
     // Message-only mode for scripts and hooks (silent, just output the message)
     if (options.messageOnly) {
       console.log(defaultMessage.full);
+      return;
+    }
+
+    // Dry run mode - show detailed preview without committing
+    if (options.dryRun) {
+      displayDryRun(status, suggestions, defaultMessage);
       return;
     }
 
@@ -244,5 +251,94 @@ async function handleMultipleChoice(choice: string, suggestions: MessageSuggesti
       console.log('\nInvalid choice. No action taken.');
       console.log('\nTo commit with the recommended message, run:');
       console.log(`  git commit -m "${escapeForShell(suggestions[0].message.full)}"`);
+  }
+}
+
+function displayDryRun(
+  status: { staged: { status: string; path: string }[] },
+  suggestions: MessageSuggestion[],
+  defaultMessage: { type: string; scope?: string; description: string; body?: string; full: string; isBreaking?: boolean }
+): void {
+  const stats = GitService.getDiffStats();
+
+  console.log('\n' + '═'.repeat(60));
+  console.log('  DRY RUN - No changes will be made');
+  console.log('═'.repeat(60));
+
+  // Show files that would be committed
+  console.log('\n📁 Files to be committed:');
+  console.log('─'.repeat(40));
+  for (const file of status.staged) {
+    const statusSymbol = getStatusSymbol(file.status);
+    const statusLabel = getStatusLabel(file.status);
+    console.log(`  ${statusSymbol} ${file.path} (${statusLabel})`);
+  }
+  console.log(`\n  Total: ${stats.filesChanged} file(s), +${stats.insertions}/-${stats.deletions} lines`);
+
+  // Show commit message details
+  console.log('\n📝 Commit message:');
+  console.log('─'.repeat(40));
+  const lines = defaultMessage.full.split('\n');
+  for (const line of lines) {
+    console.log(`  ${line}`);
+  }
+
+  // Show message breakdown
+  console.log('\n🔍 Breakdown:');
+  console.log('─'.repeat(40));
+  console.log(`  Type:        ${defaultMessage.type}`);
+  if (defaultMessage.scope) {
+    console.log(`  Scope:       ${defaultMessage.scope}`);
+  }
+  console.log(`  Description: ${defaultMessage.description}`);
+  if (defaultMessage.isBreaking) {
+    console.log(`  Breaking:    Yes`);
+  }
+  if (defaultMessage.body) {
+    console.log(`  Body:        Yes (multi-line)`);
+  }
+
+  // Show alternative suggestions if available
+  if (suggestions.length > 1) {
+    console.log('\n📋 Alternative suggestions available:');
+    console.log('─'.repeat(40));
+    for (let i = 1; i < suggestions.length; i++) {
+      const s = suggestions[i];
+      const subjectLine = s.message.full.split('\n')[0];
+      console.log(`  [${s.id}] ${s.label}: ${subjectLine}`);
+    }
+  }
+
+  // Show the command that would be executed
+  console.log('\n⚡ Command that would be executed:');
+  console.log('─'.repeat(40));
+  if (defaultMessage.full.includes('\n')) {
+    console.log('  git commit -F - <<EOF');
+    for (const line of defaultMessage.full.split('\n')) {
+      console.log(`  ${line}`);
+    }
+    console.log('  EOF');
+  } else {
+    console.log(`  git commit -m "${escapeForShell(defaultMessage.full)}"`);
+  }
+
+  console.log('\n' + '═'.repeat(60));
+  console.log('  To commit, run: commit-genie -c');
+  console.log('  Or interactively: commit-genie');
+  console.log('═'.repeat(60) + '\n');
+}
+
+function getStatusLabel(status: string): string {
+  switch (status) {
+    case 'A':
+      return 'added';
+    case 'M':
+      return 'modified';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    default:
+      return 'unknown';
   }
 }

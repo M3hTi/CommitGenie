@@ -22,6 +22,7 @@ A CLI tool that generates intelligent Git commit messages by analyzing your stag
 - **Ticket/Issue linking** - Auto-detects ticket references from branch names (JIRA, GitHub issues)
 - **Commit history learning** - Learns your project's commit style from past commits
 - **Breaking change detection** - Automatically detects and flags breaking changes with `!` and footer
+- **Dry run mode** - Preview commits without executing with `-d` or `--dry-run`
 - Shows detailed file change statistics
 - Error handling for edge cases
 
@@ -111,6 +112,7 @@ To commit with this message, run:
 - `commit-genie` or `commit-genie generate` - Analyze changes and suggest commit message
 - `commit-genie gen` - Shorthand for generate
 - `commit-genie -c` or `--commit` - Auto-commit with the generated message
+- `commit-genie -d` or `--dry-run` - Preview commit without executing (dry run mode)
 - `commit-genie -s` or `--single` - Show only one suggestion (skip multiple options)
 - `commit-genie -m` or `--message-only` - Output only the commit message (for scripts/hooks)
 - `commit-genie --no-interactive` - Disable interactive prompts
@@ -121,6 +123,55 @@ To commit with this message, run:
 - `commit-genie config show` - Show current configuration
 - `commit-genie --help` - Show help
 - `commit-genie --version` - Show version
+
+### Dry Run Mode
+
+Preview exactly what would be committed without making any changes:
+
+```bash
+commit-genie -d
+# or
+commit-genie --dry-run
+```
+
+This displays:
+- All files that would be committed (with status)
+- The generated commit message
+- Message breakdown (type, scope, description)
+- Alternative suggestions available
+- The exact git command that would be executed
+
+Example output:
+```
+════════════════════════════════════════════════════════════
+  DRY RUN - No changes will be made
+════════════════════════════════════════════════════════════
+
+📁 Files to be committed:
+────────────────────────────────────
+  + src/newFeature.ts (added)
+  ~ src/utils/helper.ts (modified)
+
+  Total: 2 file(s), +45/-3 lines
+
+📝 Commit message:
+────────────────────────────────────
+  ✨ feat: add newFeature.ts and update helper
+
+🔍 Breakdown:
+────────────────────────────────────
+  Type:        feat
+  Description: add newFeature.ts and update helper
+
+⚡ Command that would be executed:
+────────────────────────────────────
+  git commit -m "✨ feat: add newFeature.ts and update helper"
+
+════════════════════════════════════════════════════════════
+  To commit, run: commit-genie -c
+  Or interactively: commit-genie
+════════════════════════════════════════════════════════════
+```
 
 ### Interactive Mode
 

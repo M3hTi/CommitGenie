@@ -17,6 +17,7 @@ program
   .alias('gen')
   .description('Analyze staged changes and suggest a commit message')
   .option('-c, --commit', 'Automatically commit with the generated message')
+  .option('-d, --dry-run', 'Preview commit without executing (shows what would be committed)')
   .option('--no-interactive', 'Disable interactive mode (just show the message)')
   .option('-m, --message-only', 'Output only the commit message (for scripts/hooks)')
   .option('-s, --single', 'Show only one suggestion (skip multiple options)')
@@ -60,6 +61,7 @@ configCommand
 // Default action (if no command specified, run generate)
 program
   .option('-c, --commit', 'Automatically commit with the generated message')
+  .option('-d, --dry-run', 'Preview commit without executing (shows what would be committed)')
   .option('--no-interactive', 'Disable interactive mode (just show the message)')
   .option('-m, --message-only', 'Output only the commit message (for scripts/hooks)')
   .option('-s, --single', 'Show only one suggestion (skip multiple options)')
