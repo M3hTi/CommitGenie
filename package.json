@@ -4,7 +4,7 @@
   "description": "A CLI tool to generate intelligent Git commit messages based on code changes",
   "main": "dist/index.js",
   "bin": {
-    "commit-genie": "./dist/index.js"
+    "commit-genie": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
