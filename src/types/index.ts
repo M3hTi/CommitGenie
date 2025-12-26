@@ -25,6 +25,13 @@ export interface ChangeAnalysis {
     config: number;
     source: number;
   };
+  fileChanges: {
+    added: string[];
+    modified: string[];
+    deleted: string[];
+    renamed: string[];
+  };
+  isLargeChange: boolean;
 }
 
 export type CommitType =
@@ -41,7 +48,14 @@ export interface CommitMessage {
   type: CommitType;
   scope?: string;
   description: string;
+  body?: string;
   full: string;
+}
+
+export interface MessageSuggestion {
+  id: number;
+  message: CommitMessage;
+  label: string;
 }
 
 export interface FilePattern {

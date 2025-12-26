@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { GitStatus, FileChange, DiffStats } from '../types';
 
 export class GitService {
@@ -109,19 +109,26 @@ export class GitService {
   }
 
   /**
-   * Commit staged changes with the given message
+   * Commit staged changes with the given message (supports multi-line)
    */
   static commit(message: string): void {
     try {
-      execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
+      // Use -F - to read message from stdin (supports multi-line)
+      const result = spawnSync('git', ['commit', '-F', '-'], {
+        input: message,
         encoding: 'utf-8',
-        stdio: 'pipe',
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
-    } catch (error: any) {
-      if (error.stderr) {
-        throw new Error(`Failed to commit: ${error.stderr}`);
+
+      if (result.status !== 0) {
+        const errorMsg = result.stderr?.trim() || result.stdout?.trim() || 'Unknown error';
+        throw new Error(errorMsg);
       }
-      throw new Error(`Failed to commit: ${error.message}`);
+    } catch (error: any) {
+      if (error.message) {
+        throw new Error(`Failed to commit: ${error.message}`);
+      }
+      throw new Error('Failed to commit: Unknown error');
     }
   }
 

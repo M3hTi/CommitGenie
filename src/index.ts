@@ -19,6 +19,7 @@ program
   .option('-c, --commit', 'Automatically commit with the generated message')
   .option('--no-interactive', 'Disable interactive mode (just show the message)')
   .option('-m, --message-only', 'Output only the commit message (for scripts/hooks)')
+  .option('-s, --single', 'Show only one suggestion (skip multiple options)')
   .action((options) => generateCommand(options));
 
 // Hook commands
@@ -61,6 +62,7 @@ program
   .option('-c, --commit', 'Automatically commit with the generated message')
   .option('--no-interactive', 'Disable interactive mode (just show the message)')
   .option('-m, --message-only', 'Output only the commit message (for scripts/hooks)')
+  .option('-s, --single', 'Show only one suggestion (skip multiple options)')
   .action((options) => {
     generateCommand(options);
   });

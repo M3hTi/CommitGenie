@@ -1,7 +1,7 @@
 import { GitService } from './gitService';
 import { ConfigService } from './configService';
 import { detectFileType } from '../utils/filePatterns';
-import { ChangeAnalysis, CommitMessage, CommitType, FileChange } from '../types';
+import { ChangeAnalysis, CommitMessage, CommitType, FileChange, MessageSuggestion } from '../types';
 
 const COMMIT_EMOJIS: Record<CommitType, string> = {
   feat: '✨',
@@ -21,6 +21,7 @@ export class AnalyzerService {
   static analyzeChanges(): ChangeAnalysis {
     const stagedFiles = GitService.getStagedFiles();
     const diff = GitService.getDiff();
+    const stats = GitService.getDiffStats();
 
     const filesAffected = {
       test: 0,
@@ -29,33 +30,38 @@ export class AnalyzerService {
       source: 0,
     };
 
-    const fileStatuses = {
-      added: 0,
-      modified: 0,
-      deleted: 0,
-      renamed: 0,
+    const fileChanges: ChangeAnalysis['fileChanges'] = {
+      added: [],
+      modified: [],
+      deleted: [],
+      renamed: [],
     };
 
     // Analyze file types and statuses
     for (const file of stagedFiles) {
       const fileType = detectFileType(file.path);
       filesAffected[fileType]++;
+      const fileName = this.getFileName(file.path);
 
       switch (file.status) {
         case 'A':
-          fileStatuses.added++;
+          fileChanges.added.push(fileName);
           break;
         case 'M':
-          fileStatuses.modified++;
+          fileChanges.modified.push(fileName);
           break;
         case 'D':
-          fileStatuses.deleted++;
+          fileChanges.deleted.push(fileName);
           break;
         case 'R':
-          fileStatuses.renamed++;
+          fileChanges.renamed.push(fileName);
           break;
       }
     }
+
+    // Determine if this is a large change (3+ files or 100+ lines changed)
+    const totalChanges = stats.insertions + stats.deletions;
+    const isLargeChange = stagedFiles.length >= 3 || totalChanges >= 100;
 
     // Determine commit type based on file types and changes
     const commitType = this.determineCommitType(
@@ -67,7 +73,12 @@ export class AnalyzerService {
     // Generate description
     const description = this.generateDescription(
       filesAffected,
-      fileStatuses,
+      {
+        added: fileChanges.added.length,
+        modified: fileChanges.modified.length,
+        deleted: fileChanges.deleted.length,
+        renamed: fileChanges.renamed.length
+      },
       stagedFiles,
       diff
     );
@@ -80,6 +91,8 @@ export class AnalyzerService {
       scope,
       description,
       filesAffected,
+      fileChanges,
+      isLargeChange,
     };
   }
 
@@ -288,32 +301,234 @@ export class AnalyzerService {
   }
 
   /**
+   * Generate commit body for larger changes
+   */
+  private static generateBody(analysis: ChangeAnalysis): string | undefined {
+    if (!analysis.isLargeChange) {
+      return undefined;
+    }
+
+    const lines: string[] = [];
+
+    if (analysis.fileChanges.added.length > 0) {
+      lines.push(`- Add ${analysis.fileChanges.added.join(', ')}`);
+    }
+
+    if (analysis.fileChanges.modified.length > 0) {
+      const files = analysis.fileChanges.modified.slice(0, 5);
+      const suffix = analysis.fileChanges.modified.length > 5
+        ? ` and ${analysis.fileChanges.modified.length - 5} more`
+        : '';
+      lines.push(`- Update ${files.join(', ')}${suffix}`);
+    }
+
+    if (analysis.fileChanges.deleted.length > 0) {
+      lines.push(`- Remove ${analysis.fileChanges.deleted.join(', ')}`);
+    }
+
+    if (analysis.fileChanges.renamed.length > 0) {
+      lines.push(`- Rename ${analysis.fileChanges.renamed.join(', ')}`);
+    }
+
+    return lines.length > 0 ? lines.join('\n') : undefined;
+  }
+
+  /**
+   * Build full commit message string
+   */
+  private static buildFullMessage(
+    type: CommitType,
+    scope: string | undefined,
+    description: string,
+    body: string | undefined,
+    includeEmoji: boolean
+  ): string {
+    let full = '';
+
+    if (includeEmoji) {
+      full += `${COMMIT_EMOJIS[type]} `;
+    }
+
+    full += type;
+
+    if (scope) {
+      full += `(${scope})`;
+    }
+
+    full += `: ${description}`;
+
+    if (body) {
+      full += `\n\n${body}`;
+    }
+
+    return full;
+  }
+
+  /**
    * Generate the final commit message
    */
   static generateCommitMessage(): CommitMessage {
     const analysis = this.analyzeChanges();
     const config = ConfigService.getConfig();
-    const includeEmoji = config.includeEmoji !== false; // Default to true
+    const includeEmoji = config.includeEmoji !== false;
 
-    let full = '';
-
-    if (includeEmoji) {
-      full += `${COMMIT_EMOJIS[analysis.commitType]} `;
-    }
-
-    full += analysis.commitType;
-
-    if (analysis.scope) {
-      full += `(${analysis.scope})`;
-    }
-
-    full += `: ${analysis.description}`;
+    const body = this.generateBody(analysis);
+    const full = this.buildFullMessage(
+      analysis.commitType,
+      analysis.scope,
+      analysis.description,
+      body,
+      includeEmoji
+    );
 
     return {
       type: analysis.commitType,
       scope: analysis.scope,
       description: analysis.description,
+      body,
       full,
     };
+  }
+
+  /**
+   * Generate multiple message suggestions
+   */
+  static generateMultipleSuggestions(): MessageSuggestion[] {
+    const analysis = this.analyzeChanges();
+    const config = ConfigService.getConfig();
+    const includeEmoji = config.includeEmoji !== false;
+    const suggestions: MessageSuggestion[] = [];
+
+    const body = this.generateBody(analysis);
+
+    // Suggestion 1: Default (with scope if detected)
+    const defaultFull = this.buildFullMessage(
+      analysis.commitType,
+      analysis.scope,
+      analysis.description,
+      body,
+      includeEmoji
+    );
+    suggestions.push({
+      id: 1,
+      label: 'Recommended',
+      message: {
+        type: analysis.commitType,
+        scope: analysis.scope,
+        description: analysis.description,
+        body,
+        full: defaultFull,
+      },
+    });
+
+    // Suggestion 2: Without scope (more concise)
+    if (analysis.scope) {
+      const noScopeFull = this.buildFullMessage(
+        analysis.commitType,
+        undefined,
+        analysis.description,
+        body,
+        includeEmoji
+      );
+      suggestions.push({
+        id: 2,
+        label: 'Concise',
+        message: {
+          type: analysis.commitType,
+          scope: undefined,
+          description: analysis.description,
+          body,
+          full: noScopeFull,
+        },
+      });
+    }
+
+    // Suggestion 3: Alternative description style
+    const altDescription = this.generateAlternativeDescription(analysis);
+    if (altDescription && altDescription !== analysis.description) {
+      const altFull = this.buildFullMessage(
+        analysis.commitType,
+        analysis.scope,
+        altDescription,
+        body,
+        includeEmoji
+      );
+      suggestions.push({
+        id: suggestions.length + 1,
+        label: 'Detailed',
+        message: {
+          type: analysis.commitType,
+          scope: analysis.scope,
+          description: altDescription,
+          body,
+          full: altFull,
+        },
+      });
+    }
+
+    // Suggestion 4: Without body (compact) - only if body exists
+    if (body) {
+      const compactFull = this.buildFullMessage(
+        analysis.commitType,
+        analysis.scope,
+        analysis.description,
+        undefined,
+        includeEmoji
+      );
+      suggestions.push({
+        id: suggestions.length + 1,
+        label: 'Compact',
+        message: {
+          type: analysis.commitType,
+          scope: analysis.scope,
+          description: analysis.description,
+          body: undefined,
+          full: compactFull,
+        },
+      });
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * Generate an alternative description style
+   */
+  private static generateAlternativeDescription(analysis: ChangeAnalysis): string {
+    const { fileChanges, filesAffected } = analysis;
+    const totalFiles = fileChanges.added.length + fileChanges.modified.length +
+                       fileChanges.deleted.length + fileChanges.renamed.length;
+
+    // For single file, provide more detail
+    if (totalFiles === 1) {
+      if (fileChanges.added.length === 1) {
+        return `implement ${fileChanges.added[0]}`;
+      }
+      if (fileChanges.modified.length === 1) {
+        return `improve ${fileChanges.modified[0]}`;
+      }
+    }
+
+    // For multiple files, be more descriptive about categories
+    const parts: string[] = [];
+
+    if (filesAffected.source > 0) {
+      parts.push(`${filesAffected.source} source file${filesAffected.source > 1 ? 's' : ''}`);
+    }
+    if (filesAffected.test > 0) {
+      parts.push(`${filesAffected.test} test${filesAffected.test > 1 ? 's' : ''}`);
+    }
+    if (filesAffected.docs > 0) {
+      parts.push(`${filesAffected.docs} doc${filesAffected.docs > 1 ? 's' : ''}`);
+    }
+    if (filesAffected.config > 0) {
+      parts.push(`${filesAffected.config} config${filesAffected.config > 1 ? 's' : ''}`);
+    }
+
+    if (parts.length > 0) {
+      return `update ${parts.join(', ')}`;
+    }
+
+    return analysis.description;
   }
 }
