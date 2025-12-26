@@ -1,0 +1,41 @@
+{
+  "name": "@m3hti/commit-genie",
+  "version": "1.0.0",
+  "description": "A CLI tool to generate intelligent Git commit messages based on code changes",
+  "main": "dist/index.js",
+  "bin": {
+    "commit-genie": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "cli",
+    "conventional-commits"
+  ],
+  "author": "M3hTi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/M3hTi/CommitGenie.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
