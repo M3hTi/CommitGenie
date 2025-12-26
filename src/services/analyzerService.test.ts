@@ -21,7 +21,7 @@ describe('AnalyzerService', () => {
   });
 
   describe('generateCommitMessage', () => {
-    it('should generate feat commit for new source files', () => {
+    it('should generate feat commit for new source files with emoji', () => {
       mockedGitService.getStagedFiles.mockReturnValue([
         { status: 'A', path: 'src/services/newService.ts' },
       ]);
@@ -31,6 +31,23 @@ describe('AnalyzerService', () => {
 
       expect(result.type).toBe('feat');
       expect(result.description).toBe('add newService.ts');
+      expect(result.full).toBe('✨ feat: add newService.ts');
+    });
+
+    it('should exclude emoji when includeEmoji is false', () => {
+      mockedConfigService.getConfig.mockReturnValue({
+        scopes: [],
+        defaultType: 'feat',
+        maxMessageLength: 72,
+        includeEmoji: false,
+      });
+      mockedGitService.getStagedFiles.mockReturnValue([
+        { status: 'A', path: 'src/services/newService.ts' },
+      ]);
+      mockedGitService.getDiff.mockReturnValue('');
+
+      const result = AnalyzerService.generateCommitMessage();
+
       expect(result.full).toBe('feat: add newService.ts');
     });
 

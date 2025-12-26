@@ -1,0 +1,25 @@
+# Source files (dist is included)
+src/
+
+# Tests
+*.test.ts
+*.spec.ts
+__tests__/
+
+# Coverage
+coverage/
+
+# Config files
+jest.config.js
+tsconfig.json
+.eslintrc*
+.prettierrc*
+
+# Development files
+.git/
+.gitignore
+.vscode/
+*.log
+
+# Documentation (README is included)
+docs/

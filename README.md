@@ -6,14 +6,16 @@ A CLI tool that generates intelligent Git commit messages by analyzing your stag
 
 - Analyzes staged Git changes automatically
 - Follows [Conventional Commits](https://www.conventionalcommits.org/) format
+- Adds relevant emojis to commit messages based on type
 - Detects commit types based on file patterns and diff content:
-  - `feat:` for new features
-  - `fix:` for bug fixes
-  - `docs:` for documentation changes
-  - `test:` for test files
-  - `chore:` for configuration changes
-  - `refactor:` for code refactoring
-  - `perf:` for performance improvements
+  - `✨ feat:` for new features
+  - `🐛 fix:` for bug fixes
+  - `📚 docs:` for documentation changes
+  - `🧪 test:` for test files
+  - `🔧 chore:` for configuration changes
+  - `♻️ refactor:` for code refactoring
+  - `⚡ perf:` for performance improvements
+  - `💄 style:` for style changes
 - Automatically determines scope when applicable
 - Shows detailed file change statistics
 - Error handling for edge cases
@@ -87,7 +89,7 @@ Staged files:
 Suggested commit message:
 ──────────────────────────────────────────────────
 
-feat: add userService.ts and update 1 file
+✨ feat: add userService.ts and update 1 file
 
 ──────────────────────────────────────────────────
 
@@ -96,7 +98,7 @@ Breakdown:
   Description: add userService.ts and update 1 file
 
 To commit with this message, run:
-  git commit -m "feat: add userService.ts and update 1 file"
+  git commit -m "✨ feat: add userService.ts and update 1 file"
 ```
 
 ### Commands
@@ -147,6 +149,7 @@ Example configuration:
     { "pattern": "src/components", "scope": "ui" }
   ],
   "defaultType": "feat",
+  "includeEmoji": true,
   "maxMessageLength": 72
 }
 ```
@@ -154,6 +157,7 @@ Example configuration:
 Configuration options:
 - `scopes` - Map file path patterns to commit scopes
 - `defaultType` - Default commit type when none is detected
+- `includeEmoji` - Include emoji prefix in commit messages (default: `true`)
 - `maxMessageLength` - Maximum length for commit messages
 
 ## Development

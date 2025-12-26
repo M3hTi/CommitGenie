@@ -12,7 +12,7 @@ const CONFIG_FILES = [
 const DEFAULT_CONFIG: CommitGenieConfig = {
   scopes: [],
   defaultType: 'feat',
-  includeEmoji: false,
+  includeEmoji: true,
   maxMessageLength: 72,
   customPatterns: [],
 };
@@ -115,7 +115,7 @@ export class ConfigService {
           { pattern: 'src/utils', scope: 'utils' },
         ],
         defaultType: 'feat',
-        includeEmoji: false,
+        includeEmoji: true,
         maxMessageLength: 72,
         customPatterns: [],
       };

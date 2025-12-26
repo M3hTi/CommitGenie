@@ -25,6 +25,7 @@ describe('ConfigService', () => {
 
       expect(config.defaultType).toBe('feat');
       expect(config.maxMessageLength).toBe(72);
+      expect(config.includeEmoji).toBe(true);
       expect(config.scopes).toEqual([]);
     });
 

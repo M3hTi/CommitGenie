@@ -3,6 +3,17 @@ import { ConfigService } from './configService';
 import { detectFileType } from '../utils/filePatterns';
 import { ChangeAnalysis, CommitMessage, CommitType, FileChange } from '../types';
 
+const COMMIT_EMOJIS: Record<CommitType, string> = {
+  feat: '✨',
+  fix: '🐛',
+  docs: '📚',
+  style: '💄',
+  refactor: '♻️',
+  test: '🧪',
+  chore: '🔧',
+  perf: '⚡',
+};
+
 export class AnalyzerService {
   /**
    * Analyze staged changes and return structured analysis
@@ -281,8 +292,16 @@ export class AnalyzerService {
    */
   static generateCommitMessage(): CommitMessage {
     const analysis = this.analyzeChanges();
+    const config = ConfigService.getConfig();
+    const includeEmoji = config.includeEmoji !== false; // Default to true
 
-    let full = analysis.commitType;
+    let full = '';
+
+    if (includeEmoji) {
+      full += `${COMMIT_EMOJIS[analysis.commitType]} `;
+    }
+
+    full += analysis.commitType;
 
     if (analysis.scope) {
       full += `(${analysis.scope})`;
