@@ -20,17 +20,35 @@ A CLI tool that generates intelligent Git commit messages by analyzing your stag
 
 ## Installation
 
-1. Install dependencies:
+### Using npx (Recommended)
+Run directly without installation:
+```bash
+npx @m3hti/commit-genie
+```
+
+### Global Installation
+```bash
+npm install -g @m3hti/commit-genie
+```
+
+### Local Development
+1. Clone the repository:
+```bash
+git clone https://github.com/M3hTi/CommitGenie.git
+cd CommitGenie
+```
+
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Build the project:
+3. Build the project:
 ```bash
 npm run build
 ```
 
-3. Link the CLI globally (optional):
+4. Link the CLI globally (optional):
 ```bash
 npm link
 ```
@@ -46,9 +64,14 @@ git add <files>
 
 2. Run CommitGenie:
 ```bash
-npm run dev
-# or if linked globally:
+# Using npx:
+npx @m3hti/commit-genie
+
+# Or if installed globally:
 commit-genie
+
+# Or for local development:
+npm run dev
 ```
 
 3. The tool will analyze your changes and suggest a commit message:
