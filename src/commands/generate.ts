@@ -6,6 +6,7 @@ import { MessageSuggestion } from '../types';
 export interface GenerateOptions {
   commit?: boolean;
   dryRun?: boolean;  // Preview commit without executing
+  ai?: boolean;      // Use AI for enhanced descriptions
   interactive?: boolean;
   messageOnly?: boolean;
   single?: boolean;  // Use single message mode (no multiple suggestions)
@@ -33,8 +34,14 @@ export async function generateCommand(options: GenerateOptions = {}) {
       process.exit(1);
     }
 
-    // Generate suggestions
-    const suggestions = AnalyzerService.generateMultipleSuggestions();
+    // Generate suggestions (with optional AI enhancement)
+    let suggestions: MessageSuggestion[];
+    if (options.ai) {
+      console.log('\nUsing AI to enhance commit message...');
+      suggestions = await AnalyzerService.generateSuggestionsWithAI(true);
+    } else {
+      suggestions = AnalyzerService.generateMultipleSuggestions();
+    }
     const defaultMessage = suggestions[0].message;
 
     // Message-only mode for scripts and hooks (silent, just output the message)

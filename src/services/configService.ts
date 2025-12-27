@@ -27,6 +27,16 @@ const DEFAULT_CONFIG: CommitGenieConfig = {
     enabled: true,
     includeFooter: true,
   },
+  templates: {
+    default: '{emoji} {type}({scope}): {description}',
+    noScope: '{emoji} {type}: {description}',
+    withBody: '{emoji} {type}({scope}): {description}\n\n{body}',
+  },
+  ai: {
+    enabled: false,
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+  },
 };
 
 export class ConfigService {
@@ -143,6 +153,16 @@ export class ConfigService {
           enabled: true,
           keywords: ['breaking', 'removed', 'deleted', 'deprecated'],
           includeFooter: true,
+        },
+        templates: {
+          default: '{emoji} {type}({scope}): {description}',
+          noScope: '{emoji} {type}: {description}',
+          withBody: '{emoji} {type}({scope}): {description}\n\n{body}',
+        },
+        ai: {
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-4o-mini',
         },
       };
 

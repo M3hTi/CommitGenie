@@ -99,6 +99,19 @@ export interface CommitGenieConfig {
     keywords?: string[];  // Custom keywords to detect breaking changes
     includeFooter?: boolean;  // Include BREAKING CHANGE: footer (default: true)
   };
+  // Custom templates
+  templates?: {
+    default?: string;  // e.g., "{emoji} {type}({scope}): {description}"
+    noScope?: string;  // Template when no scope, e.g., "{emoji} {type}: {description}"
+    withBody?: string; // Template for multi-line commits
+  };
+  // AI integration
+  ai?: {
+    enabled?: boolean;
+    provider?: 'openai' | 'anthropic';
+    apiKey?: string;
+    model?: string;
+  };
 }
 
 export interface TicketInfo {
@@ -122,4 +135,19 @@ export interface HistoricalCommit {
   message: string;
   subject: string;
   body?: string;
+  author?: string;
+  date?: string;
+}
+
+export interface CommitStats {
+  totalCommits: number;
+  commitsByType: Record<string, number>;
+  commitsByScope: Record<string, number>;
+  commitsByAuthor: Record<string, number>;
+  commitsByMonth: Record<string, number>;
+  averageMessageLength: number;
+  emojiUsagePercent: number;
+  conventionalCommitsPercent: number;
+  topContributors: { name: string; count: number }[];
+  recentActivity: { date: string; count: number }[];
 }

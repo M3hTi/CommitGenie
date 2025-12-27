@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { generateCommand } from './commands/generate';
 import { hookInstallCommand, hookUninstallCommand, hookStatusCommand } from './commands/hook';
 import { configInitCommand, configShowCommand } from './commands/config';
+import { statsCommand } from './commands/stats';
 
 const program = new Command();
 
@@ -18,6 +19,7 @@ program
   .description('Analyze staged changes and suggest a commit message')
   .option('-c, --commit', 'Automatically commit with the generated message')
   .option('-d, --dry-run', 'Preview commit without executing (shows what would be committed)')
+  .option('--ai', 'Use AI to generate enhanced commit descriptions (requires API key in config)')
   .option('--no-interactive', 'Disable interactive mode (just show the message)')
   .option('-m, --message-only', 'Output only the commit message (for scripts/hooks)')
   .option('-s, --single', 'Show only one suggestion (skip multiple options)')
@@ -58,10 +60,24 @@ configCommand
   .description('Show current configuration')
   .action(configShowCommand);
 
+// Stats command
+program
+  .command('stats')
+  .description('Show commit statistics for the repository')
+  .option('-n, --count <number>', 'Number of commits to analyze', '100')
+  .option('--json', 'Output as JSON')
+  .action((options) => {
+    statsCommand({
+      count: parseInt(options.count, 10),
+      json: options.json,
+    });
+  });
+
 // Default action (if no command specified, run generate)
 program
   .option('-c, --commit', 'Automatically commit with the generated message')
   .option('-d, --dry-run', 'Preview commit without executing (shows what would be committed)')
+  .option('--ai', 'Use AI to generate enhanced commit descriptions (requires API key in config)')
   .option('--no-interactive', 'Disable interactive mode (just show the message)')
   .option('-m, --message-only', 'Output only the commit message (for scripts/hooks)')
   .option('-s, --single', 'Show only one suggestion (skip multiple options)')

@@ -1,6 +1,7 @@
 import { GitService } from './gitService';
 import { ConfigService } from './configService';
 import { HistoryService } from './historyService';
+import { AIService } from './aiService';
 import { detectFileType } from '../utils/filePatterns';
 import { ChangeAnalysis, CommitMessage, CommitType, FileChange, MessageSuggestion, TicketInfo } from '../types';
 
@@ -440,6 +441,39 @@ export class AnalyzerService {
   }
 
   /**
+   * Apply a template to build the commit message subject line
+   */
+  private static applyTemplate(
+    template: string,
+    type: CommitType,
+    scope: string | undefined,
+    description: string,
+    includeEmoji: boolean,
+    isBreaking?: boolean
+  ): string {
+    const emoji = includeEmoji ? COMMIT_EMOJIS[type] : '';
+    const breakingIndicator = isBreaking ? '!' : '';
+
+    let result = template
+      .replace('{emoji}', emoji)
+      .replace('{type}', type + breakingIndicator)
+      .replace('{description}', description);
+
+    // Handle scope - if no scope, use noScope template or remove scope placeholder
+    if (scope) {
+      result = result.replace('{scope}', scope);
+    } else {
+      // Remove scope and parentheses if no scope
+      result = result.replace('({scope})', '').replace('{scope}', '');
+    }
+
+    // Clean up extra spaces
+    result = result.replace(/\s+/g, ' ').trim();
+
+    return result;
+  }
+
+  /**
    * Build full commit message string
    */
   private static buildFullMessage(
@@ -454,25 +488,36 @@ export class AnalyzerService {
   ): string {
     const config = ConfigService.getConfig();
     const includeBreakingFooter = config.breakingChangeDetection?.includeFooter !== false;
+    const templates = config.templates;
 
     let full = '';
 
-    if (includeEmoji) {
-      full += `${COMMIT_EMOJIS[type]} `;
+    // Use template if available
+    if (templates) {
+      const template = scope
+        ? (templates.default || '{emoji} {type}({scope}): {description}')
+        : (templates.noScope || '{emoji} {type}: {description}');
+
+      full = this.applyTemplate(template, type, scope, description, includeEmoji, isBreaking);
+    } else {
+      // Fallback to original logic
+      if (includeEmoji) {
+        full += `${COMMIT_EMOJIS[type]} `;
+      }
+
+      full += type;
+
+      if (scope) {
+        full += `(${scope})`;
+      }
+
+      // Add breaking change indicator
+      if (isBreaking) {
+        full += '!';
+      }
+
+      full += `: ${description}`;
     }
-
-    full += type;
-
-    if (scope) {
-      full += `(${scope})`;
-    }
-
-    // Add breaking change indicator
-    if (isBreaking) {
-      full += '!';
-    }
-
-    full += `: ${description}`;
 
     if (body) {
       full += `\n\n${body}`;
@@ -713,6 +758,83 @@ export class AnalyzerService {
           isBreaking: false,
         },
       });
+    }
+
+    return suggestions;
+  }
+
+  /**
+   * Generate suggestions with optional AI enhancement
+   */
+  static async generateSuggestionsWithAI(useAI: boolean = false): Promise<MessageSuggestion[]> {
+    const suggestions = this.generateMultipleSuggestions();
+
+    // If AI is not requested or not enabled, return regular suggestions
+    if (!useAI || !AIService.isEnabled()) {
+      return suggestions;
+    }
+
+    try {
+      const analysis = this.analyzeChanges();
+      const diff = GitService.getDiff();
+      const config = ConfigService.getConfig();
+
+      // Determine emoji usage
+      let includeEmoji = config.includeEmoji;
+      if (includeEmoji === undefined) {
+        includeEmoji = HistoryService.projectUsesEmojis();
+      }
+
+      const body = this.generateBody(analysis);
+      const ticketInfo = HistoryService.detectTicketFromBranch();
+      const { isBreakingChange, breakingChangeReasons } = analysis;
+
+      // Get scope
+      let scope = analysis.scope;
+      if (!scope) {
+        const stagedFiles = GitService.getStagedFiles();
+        const filePaths = stagedFiles.map(f => f.path);
+        scope = HistoryService.getSuggestedScope(filePaths);
+      }
+
+      // Get AI-enhanced description
+      const aiResponse = await AIService.generateDescription(analysis, diff);
+
+      if (aiResponse && aiResponse.description) {
+        const aiDescription = aiResponse.description;
+        const aiFull = this.buildFullMessage(
+          analysis.commitType,
+          scope,
+          aiDescription,
+          body,
+          includeEmoji,
+          ticketInfo,
+          isBreakingChange,
+          breakingChangeReasons
+        );
+
+        // Insert AI suggestion at the beginning
+        suggestions.unshift({
+          id: 0,
+          label: 'AI Enhanced',
+          message: {
+            type: analysis.commitType,
+            scope: scope,
+            description: aiDescription,
+            body,
+            full: aiFull,
+            isBreaking: isBreakingChange,
+          },
+        });
+
+        // Re-number suggestions
+        suggestions.forEach((s, i) => {
+          s.id = i + 1;
+        });
+      }
+    } catch (error) {
+      // AI failed, just return regular suggestions
+      console.warn('AI enhancement failed, using rule-based suggestions');
     }
 
     return suggestions;

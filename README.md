@@ -23,6 +23,9 @@ A CLI tool that generates intelligent Git commit messages by analyzing your stag
 - **Commit history learning** - Learns your project's commit style from past commits
 - **Breaking change detection** - Automatically detects and flags breaking changes with `!` and footer
 - **Dry run mode** - Preview commits without executing with `-d` or `--dry-run`
+- **Custom templates** - Define your own commit message format via config
+- **Commit statistics** - Analyze your repository's commit patterns with `commit-genie stats`
+- **AI-powered descriptions** - Optional LLM integration for smarter commit messages with `--ai`
 - Shows detailed file change statistics
 - Error handling for edge cases
 
@@ -113,9 +116,13 @@ To commit with this message, run:
 - `commit-genie gen` - Shorthand for generate
 - `commit-genie -c` or `--commit` - Auto-commit with the generated message
 - `commit-genie -d` or `--dry-run` - Preview commit without executing (dry run mode)
+- `commit-genie --ai` - Use AI to generate enhanced commit descriptions
 - `commit-genie -s` or `--single` - Show only one suggestion (skip multiple options)
 - `commit-genie -m` or `--message-only` - Output only the commit message (for scripts/hooks)
 - `commit-genie --no-interactive` - Disable interactive prompts
+- `commit-genie stats` - Show commit statistics for the repository
+- `commit-genie stats -n 200` - Analyze last 200 commits
+- `commit-genie stats --json` - Output statistics as JSON
 - `commit-genie hook install` - Install git prepare-commit-msg hook
 - `commit-genie hook uninstall` - Remove the git hook
 - `commit-genie hook status` - Check if hook is installed
@@ -336,6 +343,73 @@ BREAKING CHANGE: Removed deprecated /auth/v1 endpoint
 - Disable detection entirely with `breakingChangeDetection.enabled: false`
 - Add custom keywords with `breakingChangeDetection.keywords`
 - Toggle the footer with `breakingChangeDetection.includeFooter`
+
+### Custom Templates
+
+Define your own commit message format using placeholders:
+
+```json
+{
+  "templates": {
+    "default": "{emoji} {type}({scope}): {description}",
+    "noScope": "{emoji} {type}: {description}",
+    "withBody": "{emoji} {type}({scope}): {description}\n\n{body}"
+  }
+}
+```
+
+**Available placeholders:**
+- `{emoji}` - The commit type emoji (e.g., ✨, 🐛)
+- `{type}` - The commit type with breaking indicator (e.g., `feat`, `feat!`)
+- `{scope}` - The scope if detected
+- `{description}` - The commit description
+
+### Commit Statistics
+
+Analyze your repository's commit patterns:
+
+```bash
+commit-genie stats
+```
+
+This shows:
+- Total commits and average message length
+- Conventional commits and emoji usage percentages
+- Commits breakdown by type, scope, and author
+- Top contributors with medals
+- Recent 7-day activity chart
+- Monthly commit trends
+
+Options:
+- `-n, --count <number>` - Number of commits to analyze (default: 100)
+- `--json` - Output as JSON for programmatic use
+
+### AI-Powered Descriptions
+
+Get smarter commit messages using AI (optional):
+
+```bash
+commit-genie --ai
+```
+
+**Setup:**
+1. Add your API key to config:
+```json
+{
+  "ai": {
+    "enabled": true,
+    "provider": "openai",
+    "apiKey": "sk-...",
+    "model": "gpt-4o-mini"
+  }
+}
+```
+
+2. Supported providers:
+   - **OpenAI**: `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`
+   - **Anthropic**: `claude-3-haiku-20240307`, `claude-3-sonnet-20240229`
+
+The AI analyzes your diff and generates contextually aware descriptions while following Conventional Commits format.
 
 ## Error Handling
 
