@@ -31,7 +31,7 @@ export class AIService {
     }
 
     const provider = aiConfig.provider || 'openai';
-    const model = aiConfig.model || (provider === 'openai' ? 'gpt-4o-mini' : 'claude-3-haiku-20240307');
+    const model = aiConfig.model || this.getDefaultModel(provider);
 
     // Truncate diff to avoid token limits
     const truncatedDiff = diff.length > 3000 ? diff.substring(0, 3000) + '\n...(truncated)' : diff;
@@ -43,6 +43,8 @@ export class AIService {
         return await this.callOpenAI(aiConfig.apiKey, model, prompt);
       } else if (provider === 'anthropic') {
         return await this.callAnthropic(aiConfig.apiKey, model, prompt);
+      } else if (provider === 'google') {
+        return await this.callGoogle(aiConfig.apiKey, model, prompt);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -160,5 +162,67 @@ Respond with ONLY the description text, nothing else. No quotes, no type prefix,
     }
 
     return null;
+  }
+
+  /**
+   * Call Google AI Studio (Gemini) API
+   */
+  private static async callGoogle(apiKey: string, model: string, prompt: string): Promise<AIResponse | null> {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 100,
+            temperature: 0.3,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google AI API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json() as {
+      candidates?: Array<{
+        content: {
+          parts: Array<{ text: string }>;
+        };
+      }>;
+    };
+
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (content) {
+      return { description: content.toLowerCase() };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get default model for provider
+   */
+  private static getDefaultModel(provider: string): string {
+    switch (provider) {
+      case 'openai':
+        return 'gpt-4o-mini';
+      case 'anthropic':
+        return 'claude-3-haiku-20240307';
+      case 'google':
+        return 'gemini-1.5-flash';
+      default:
+        return 'gpt-4o-mini';
+    }
   }
 }

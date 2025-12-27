@@ -108,7 +108,7 @@ export interface CommitGenieConfig {
   // AI integration
   ai?: {
     enabled?: boolean;
-    provider?: 'openai' | 'anthropic';
+    provider?: 'openai' | 'anthropic' | 'google';
     apiKey?: string;
     model?: string;
   };
