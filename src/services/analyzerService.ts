@@ -976,8 +976,8 @@ export class AnalyzerService {
         });
       }
     } catch (error) {
-      // AI failed, just return regular suggestions
-      console.warn('AI enhancement failed, using rule-based suggestions');
+      // AI failed - error already logged by AIService
+      console.log('Falling back to rule-based suggestions.\n');
     }
 
     return suggestions;

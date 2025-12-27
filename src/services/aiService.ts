@@ -45,8 +45,9 @@ export class AIService {
         return await this.callAnthropic(aiConfig.apiKey, model, prompt);
       }
     } catch (error) {
-      console.warn(`AI suggestion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      return null;
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`\n⚠ AI Error: ${errorMsg}`);
+      throw error; // Re-throw so caller can handle it
     }
 
     return null;
