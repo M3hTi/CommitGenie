@@ -211,6 +211,11 @@ export class AnalyzerService {
     diff: string,
     stagedFiles: any[]
   ): CommitType {
+    const diffLower = diff.toLowerCase();
+    const filePaths = stagedFiles.map((f: any) => f.path.toLowerCase());
+
+    // === FILE TYPE BASED DETECTION (highest priority) ===
+
     // If only test files changed
     if (
       filesAffected.test > 0 &&
@@ -239,49 +244,187 @@ export class AnalyzerService {
       return 'chore';
     }
 
-    // Analyze diff content for keywords
-    const diffLower = diff.toLowerCase();
+    // === STYLE DETECTION ===
+    // Check for style/formatting files
+    const isStyleChange = filePaths.some(p =>
+      p.endsWith('.css') ||
+      p.endsWith('.scss') ||
+      p.endsWith('.sass') ||
+      p.endsWith('.less') ||
+      p.endsWith('.styl') ||
+      p.includes('.style') ||
+      p.includes('styles/')
+    );
 
-    // Check for bug fixes
-    if (
-      diffLower.includes('fix') ||
-      diffLower.includes('bug') ||
-      diffLower.includes('issue') ||
-      diffLower.includes('error')
-    ) {
-      return 'fix';
+    // Check for formatting-only changes (whitespace, semicolons, quotes)
+    const formattingPatterns = [
+      /^[+-]\s*$/gm,  // Only whitespace changes
+      /^[+-]\s*['"`];?\s*$/gm,  // Quote changes
+      /^[+-].*;\s*$/gm,  // Semicolon additions/removals
+    ];
+    const isFormattingChange = formattingPatterns.some(p => p.test(diff));
+
+    if (isStyleChange || (isFormattingChange && !this.hasLogicChanges(diff))) {
+      return 'style';
     }
 
-    // Check for performance improvements
-    if (
-      diffLower.includes('performance') ||
-      diffLower.includes('optimize') ||
-      diffLower.includes('faster')
-    ) {
+    // === PERFORMANCE DETECTION ===
+    const perfPatterns = [
+      /\bperformance\b/i,
+      /\boptimiz(e|ation|ing)\b/i,
+      /\bfaster\b/i,
+      /\bspeed\s*(up|improvement)\b/i,
+      /\bcach(e|ing)\b/i,
+      /\bmemoiz(e|ation)\b/i,
+      /\blazy\s*load/i,
+      /\basync\b.*\bawait\b/i,
+      /\bparallel\b/i,
+      /\bbatch(ing)?\b/i,
+    ];
+    if (perfPatterns.some(p => p.test(diffLower))) {
       return 'perf';
     }
 
-    // Check for refactoring
-    if (
-      diffLower.includes('refactor') ||
-      diffLower.includes('restructure') ||
-      diffLower.includes('cleanup')
-    ) {
+    // === FIX DETECTION ===
+    const fixPatterns = [
+      /\bfix(es|ed|ing)?\s*(the\s*)?(bug|issue|error|problem|crash)/i,
+      /\bfix(es|ed|ing)?\b/i,  // Simple "fix" or "fixed" alone
+      /\bbug\s*fix/i,
+      /\bBUG:/i,  // Bug comment markers
+      /\bhotfix\b/i,
+      /\bpatch(es|ed|ing)?\b/i,
+      /\bresolv(e|es|ed|ing)\s*(the\s*)?(issue|bug|error)/i,
+      /\bcorrect(s|ed|ing)?\s*(the\s*)?(bug|issue|error|problem)/i,
+      /\brepair(s|ed|ing)?\b/i,
+      /\bhandle\s*(error|exception|null|undefined)/i,
+      /\bnull\s*check/i,
+      /\bundefined\s*check/i,
+      /\btry\s*{\s*.*\s*}\s*catch/i,
+      /\bif\s*\(\s*!\s*\w+\s*\)/,  // Null/undefined guards
+      /\bwas\s*broken\b/i,  // "was broken" indicates fixing
+      /\bbroken\b.*\bfix/i,  // broken...fix pattern
+    ];
+    if (fixPatterns.some(p => p.test(diff))) {
+      return 'fix';
+    }
+
+    // === REFACTOR DETECTION ===
+    const refactorPatterns = [
+      /\brefactor(s|ed|ing)?\b/i,
+      /\brestructur(e|es|ed|ing)\b/i,
+      /\bclean\s*up\b/i,
+      /\bsimplif(y|ies|ied|ying)\b/i,
+      /\brenam(e|es|ed|ing)\b/i,
+      /\bmov(e|es|ed|ing)\s*(to|from|into)\b/i,
+      /\bextract(s|ed|ing)?\s*(function|method|class|component)/i,
+      /\binline(s|d|ing)?\b/i,
+      /\bdedup(licate)?\b/i,
+      /\bDRY\b/,
+    ];
+
+    // Check if it's mostly modifications without new exports/functions
+    const hasOnlyModifications = stagedFiles.every((f: any) => f.status === 'M');
+    const hasNewExports = /^\+\s*export\s+(function|class|const|let|var|interface|type)/m.test(diff);
+    const hasNewFunctions = /^\+\s*(async\s+)?function\s+\w+/m.test(diff);
+    const hasNewClasses = /^\+\s*class\s+\w+/m.test(diff);
+
+    if (refactorPatterns.some(p => p.test(diff))) {
       return 'refactor';
     }
 
-    // Check if files are being added (new feature)
-    const hasNewFiles = stagedFiles.some((f) => f.status === 'A');
-    if (hasNewFiles) {
+    // If only modifying existing files without adding new exports/functions, likely refactor
+    if (hasOnlyModifications && !hasNewExports && !hasNewFunctions && !hasNewClasses) {
+      // Check if there are significant logic changes
+      const addedLines = (diff.match(/^\+[^+]/gm) || []).length;
+      const removedLines = (diff.match(/^-[^-]/gm) || []).length;
+
+      // If roughly equal adds and removes, it's likely refactoring
+      if (addedLines > 0 && removedLines > 0) {
+        const ratio = Math.min(addedLines, removedLines) / Math.max(addedLines, removedLines);
+        if (ratio > 0.3) {
+          return 'refactor';
+        }
+      }
+    }
+
+    // === CHORE DETECTION ===
+    const chorePatterns = [
+      /\bdependenc(y|ies)\b/i,
+      /\bupgrade\b/i,
+      /\bupdate\s*(version|dep)/i,
+      /\bbump\b/i,
+      /\bpackage\.json\b/i,
+      /\bpackage-lock\.json\b/i,
+      /\byarn\.lock\b/i,
+      /\b\.gitignore\b/i,
+      /\bci\b.*\b(config|setup)\b/i,
+      /\blint(er|ing)?\b/i,
+    ];
+    if (chorePatterns.some(p => p.test(diff)) || chorePatterns.some(p => filePaths.some(f => p.test(f)))) {
+      return 'chore';
+    }
+
+    // === FEAT DETECTION (new functionality) ===
+    const hasNewFiles = stagedFiles.some((f: any) => f.status === 'A');
+
+    // Check for new feature indicators
+    if (hasNewFiles || hasNewExports || hasNewFunctions || hasNewClasses) {
       return 'feat';
     }
 
-    // Default to feat for source changes
+    // Check for new functionality patterns
+    const featPatterns = [
+      /\badd(s|ed|ing)?\s+(new|feature|support|ability)/i,
+      /\bimplement(s|ed|ing)?\b/i,
+      /\bintroduc(e|es|ed|ing)\b/i,
+      /\bcreate(s|d|ing)?\b/i,
+      /\benable(s|d|ing)?\b/i,
+    ];
+    if (featPatterns.some(p => p.test(diff))) {
+      return 'feat';
+    }
+
+    // === FALLBACK ===
+    // If source files are modified without clear patterns, default to refactor for mods, feat for adds
     if (filesAffected.source > 0) {
+      if (hasOnlyModifications) {
+        return 'refactor';
+      }
       return 'feat';
     }
 
     return 'chore';
+  }
+
+  /**
+   * Check if diff contains actual logic changes (not just formatting)
+   */
+  private static hasLogicChanges(diff: string): boolean {
+    // Remove formatting-only changes and check if there's real code
+    const lines = diff.split('\n').filter(line =>
+      (line.startsWith('+') || line.startsWith('-')) &&
+      !line.startsWith('+++') &&
+      !line.startsWith('---')
+    );
+
+    for (const line of lines) {
+      const content = line.substring(1).trim();
+      // Skip empty lines, comments, and whitespace-only
+      if (
+        content.length === 0 ||
+        content.startsWith('//') ||
+        content.startsWith('/*') ||
+        content.startsWith('*') ||
+        content === '{' ||
+        content === '}' ||
+        content === ';'
+      ) {
+        continue;
+      }
+      // Has actual code change
+      return true;
+    }
+    return false;
   }
 
   /**
